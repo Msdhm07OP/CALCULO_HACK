@@ -1,0 +1,1453 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { useToast } from '../../hooks/use-toast';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { 
+    getCollegeCounsellors, 
+    bookAppointment,
+    getMyAppointments,
+    getSessionsSummary,
+    cancelAppointment as cancelAppointmentAPI,
+    formatDateToYYYYMMDD,
+    formatDateToISO,
+    convertTo24Hour,
+    convertTo12Hour
+} from '../../services/appointmentService';
+import { 
+    transformCounsellorsListData,
+    transformAppointmentsListData,
+    transformSessionsSummaryData,
+    transformBookingFormToAPI
+} from '../../services/appointmentAdapters';
+
+// --- SVG Icons ---
+const ChevronLeftIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+  </svg>
+);
+
+const CalendarIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+);
+
+const ClockIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const UserCircleIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const SparklesIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m1-12a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 6h9m-9 6h9m-9-6a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6" />
+    </svg>
+);
+
+const TrashIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+);
+
+const PencilIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" />
+    </svg>
+);
+
+const CheckCircleIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+// --- Mock Data (kept as fallback) ---
+const mockCounsellors = [
+    { id: 1, name: 'Dr. Anya Sharma', specialty: 'Cognitive Behavioral Therapy', imageUrl: 'https://placehold.co/100x100/E2E8F0/4A5568?text=AS', availableSlots: ['09:00 AM', '10:00 AM', '11:00 AM', '02:00 PM'] },
+    { id: 2, name: 'Mr. Rohan Verma', specialty: 'Stress & Anxiety Management', imageUrl: 'https://placehold.co/100x100/E2E8F0/4A5568?text=RV', availableSlots: ['10:00 AM', '11:00 AM', '12:00 PM', '03:00 PM', '04:00 PM'] },
+    { id: 3, name: 'Ms. Priya Singh', specialty: 'Mindfulness & Meditation', imageUrl: 'https://placehold.co/100x100/E2E8F0/4A5568?text=PS', availableSlots: ['09:00 AM', '03:00 PM', '04:00 PM', '05:00 PM'] },
+];
+
+// Normalize slot data into online/offline buckets so students can see modes clearly
+const groupSlotsByMode = (counsellor) => {
+    if (!counsellor) return { online: [], offline: [], unspecified: [] };
+
+    const formatTime = (value) => {
+        if (!value) return '';
+        const raw = value.toString().trim();
+        const twelveHourPattern = /^\d{1,2}:\d{2}\s*(am|pm)$/i;
+        if (/am|pm/i.test(raw)) {
+            // Only accept well-formed 12h times
+            return twelveHourPattern.test(raw) ? raw.toUpperCase().replace(' ', ' ') : '';
+        }
+        return convertTo12Hour(raw);
+    };
+
+    const detectMode = (slot = {}) => {
+        const hint = (slot.mode || slot.type || slot.channel || slot.location_type || slot.locationType || '').toString().toLowerCase();
+        if (hint.includes('offline') || hint.includes('in-person') || hint.includes('campus') || hint.includes('office')) return 'offline';
+        if (hint.includes('online') || hint.includes('virtual') || hint.includes('remote') || hint.includes('video')) return 'online';
+        return 'online'; // default to online when not specified to avoid "Unspecified" bucket
+    };
+
+    const seenOnline = new Set();
+    const seenOffline = new Set();
+    const online = [];
+    const offline = [];
+
+    const rawSlots = Array.isArray(counsellor.available_slots) && counsellor.available_slots.length > 0
+        ? counsellor.available_slots
+        : (counsellor.availableSlots || []).map(time => ({ start_time: time, __formatted: true }));
+
+    rawSlots.forEach((slot) => {
+        const timeValue = slot.start_time || slot.time || slot;
+        const formatted = slot.__formatted ? timeValue : formatTime(timeValue);
+        if (!formatted) return; // drop malformed entries like "5:%0pm"
+
+        const mode = detectMode(slot);
+
+        if (mode === 'offline') {
+            if (!seenOffline.has(formatted)) {
+                offline.push(formatted);
+                seenOffline.add(formatted);
+            }
+        } else if (mode === 'online') {
+            if (!seenOnline.has(formatted)) {
+                online.push(formatted);
+                seenOnline.add(formatted);
+            }
+        }
+    });
+
+    return { online, offline, unspecified: [] };
+};
+
+const findModeForTime = (counsellor, timeLabel) => {
+    if (!counsellor || !timeLabel) return null;
+    const { online, offline, unspecified } = groupSlotsByMode(counsellor);
+    if (unspecified.includes(timeLabel)) return 'Unspecified';
+    if (offline.includes(timeLabel)) return 'Offline';
+    if (online.includes(timeLabel)) return 'Online';
+    return null;
+};
+
+const getPastDate = (daysAgo) => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return date;
+};
+
+const getFutureDate = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date;
+};
+
+// Mock initial appointments removed - now fetched from API
+// Keeping structure for reference but not used anymore
+const initialAppointments = [];
+
+// --- Confirmation Modal Component ---
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, theme }) => {
+    const { t } = useLanguage();
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className={`${theme.colors.card} max-w-sm w-full mx-4 border-0 shadow-2xl`}>
+                <CardContent className="p-8">
+                    <h2 className={`text-2xl font-bold ${theme.colors.text} mb-4`}>{title}</h2>
+                    <p className={`${theme.colors.muted} mb-6`}>{message}</p>
+                    <div className="flex justify-end space-x-4">
+                        <Button onClick={onClose} variant="outline" className={`${theme.currentTheme === 'midnight' ? 'hover:bg-slate-700 border-slate-800' : 'hover:bg-gray-50'}`}>{t('cancel')}</Button>
+                        <Button onClick={onConfirm} className="bg-gradient-to-r from-red-500 to-red-600 hover:bg-red-600 text-white">{t('confirm')}</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
+// --- Main Component ---
+const StudentAppointments = () => {
+    const { theme, currentTheme } = useTheme();
+    const { t } = useLanguage();
+    const navigate = useNavigate();
+    
+    const [view, setView] = useState('schedule');
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [counsellors, setCounsellors] = useState([]);
+    const [selectedCounsellor, setSelectedCounsellor] = useState(null);
+    const [selectedTime, setSelectedTime] = useState(null);
+    const [step, setStep] = useState(1);
+    const [notes, setNotes] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [preparationGuide, setPreparationGuide] = useState('');
+    const [isGuideGenerating, setIsGuideGenerating] = useState(false);
+    const [bookedAppointments, setBookedAppointments] = useState([]);
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+    const [goalInput, setGoalInput] = useState({});
+    // removed isBreakingDownGoal - 'Break It Down' feature removed
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
+    const [mobileShowTimeSelection, setMobileShowTimeSelection] = useState(false);
+    const [expandedAppointments, setExpandedAppointments] = useState({});
+    const selectedSlotMode = useMemo(() => findModeForTime(selectedCounsellor, selectedTime), [selectedCounsellor, selectedTime]);
+    
+    // Toast notifications
+    const { toast } = useToast();
+    
+    // Loading and Error States
+    const [loadingCounsellors, setLoadingCounsellors] = useState(false);
+    const [loadingAppointments, setLoadingAppointments] = useState(false);
+    const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
+    const [bookingInProgress, setBookingInProgress] = useState(false);
+    const [loadingSessionGoals, setLoadingSessionGoals] = useState(false);
+    const [sessionGoalsLoaded, setSessionGoalsLoaded] = useState(false);
+    const [sessionGoals, setSessionGoals] = useState([]);
+
+    // Fetch counsellors with availability when date changes
+    useEffect(() => {
+        const fetchCounsellors = async () => {
+            setLoadingCounsellors(true);
+            try {
+                const dateStr = formatDateToYYYYMMDD(selectedDate);
+                const response = await getCollegeCounsellors(dateStr);
+                const transformedCounsellors = transformCounsellorsListData(response);
+                setCounsellors(transformedCounsellors);
+                
+                // Reset selected counsellor when date changes to force re-selection
+                setSelectedCounsellor(null);
+                setSelectedTime(null);
+                
+                // Auto-select first counsellor if available
+                if (transformedCounsellors.length > 0) {
+                    setSelectedCounsellor(transformedCounsellors[0]);
+                }
+            } catch (err) {
+                console.error('Error fetching counsellors:', err);
+                // Show error toast
+                toast({
+                    title: "Failed to Load Counsellors",
+                    description: err.response?.data?.message || "Please try again later",
+                    variant: "destructive"
+                });
+                // Fallback to mock data if API fails
+                setCounsellors(mockCounsellors);
+                if (!selectedCounsellor) setSelectedCounsellor(mockCounsellors[0]);
+            } finally {
+                setLoadingCounsellors(false);
+            }
+        };
+        
+        // Only fetch if we're on the schedule view
+        if (view === 'schedule') {
+            fetchCounsellors();
+        }
+    }, [selectedDate, view, toast]); // Re-fetch when selectedDate or view changes
+    
+    // Fetch appointments on component mount and when switching to appointments view
+    useEffect(() => {
+        const fetchAppointments = async () => {
+            // Skip if already loaded or not on appointments/goals view
+            if (appointmentsLoaded || (view !== 'appointments' && view !== 'goals')) {
+                return;
+            }
+            
+            setLoadingAppointments(true);
+            try {
+                const response = await getMyAppointments();
+                const transformedAppointments = transformAppointmentsListData(response);
+                setBookedAppointments(transformedAppointments);
+                setAppointmentsLoaded(true);
+            } catch (err) {
+                console.error('Error fetching appointments:', err);
+                // Keep empty array if fetch fails
+            } finally {
+                setLoadingAppointments(false);
+            }
+        };
+        
+        fetchAppointments();
+    }, [view, appointmentsLoaded]); // Only re-fetch when view changes to appointments/goals and not loaded
+
+    // Fetch session goals when switching to goals view
+    useEffect(() => {
+        const fetchSessionGoals = async () => {
+            // Skip if already loaded or not on goals view
+            if (sessionGoalsLoaded || view !== 'goals') {
+                return;
+            }
+            
+            setLoadingSessionGoals(true);
+            try {
+                const response = await getSessionsSummary();
+                const transformedGoals = transformSessionsSummaryData(response);
+                setSessionGoals(transformedGoals);
+                setSessionGoalsLoaded(true);
+            } catch (err) {
+                console.error('Error fetching session goals:', err);
+                // Keep empty array if fetch fails
+            } finally {
+                setLoadingSessionGoals(false);
+            }
+        };
+        
+        fetchSessionGoals();
+    }, [view, sessionGoalsLoaded]); // Only re-fetch when view changes to goals and not loaded
+
+    // Persist view state so refresh keeps the same section
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('student_appointments_view');
+            if (saved) setView(saved);
+        } catch (e) {}
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('student_appointments_view', view);
+        } catch (e) {}
+    }, [view]);
+
+    const firstDayOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
+    const daysInMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate(), [currentDate]);
+
+    const callEmergentAPI = async (prompt) => {
+        const apiKey = "sk-emergent-1C7AcEfAeFeCa44AaE";
+        const apiUrl = "https://api.emergentmind.com/v1/chat/completions";
+        
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-4",
+                    messages: [{ role: "user", content: prompt }],
+                    max_tokens: 500
+                }),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                return result.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response right now.";
+            }
+        } catch (error) {
+            console.error("Emergent API call error:", error);
+        }
+        return "Sorry, there was an issue connecting to the AI service.";
+    };
+
+    const handleGenerateNotes = async () => {
+        setIsGenerating(true);
+        const prompt = "Act as a helpful assistant for a student scheduling a counseling session. Generate 3-4 bullet points for session notes related to common student challenges like academic stress, feeling overwhelmed, or managing relationships. The tone should be encouraging. Start with 'Here are a few ideas to get you started:'";
+        const generatedNotes = await callEmergentAPI(prompt);
+        setNotes(generatedNotes);
+        setIsGenerating(false);
+    };
+
+    const handleGeneratePrepGuide = async () => {
+        setIsGuideGenerating(true);
+        setPreparationGuide('');
+        const prompt = `Act as a caring counselor. A student booked a session on "${selectedCounsellor.specialty}". Their notes are: "${notes || 'No notes provided'}". Generate a short, encouraging preparation guide with 2-3 gentle reflection questions. The tone should be warm and reassuring.`;
+        const generatedGuide = await callEmergentAPI(prompt);
+        setPreparationGuide(generatedGuide);
+        setIsGuideGenerating(false);
+    };
+
+    const handleBookAppointment = async () => {
+        if (!selectedCounsellor || !selectedDate || !selectedTime) {
+            toast({
+                title: "Missing Information",
+                description: "Please select a counsellor, date, and time",
+                variant: "destructive"
+            });
+            return;
+        }
+        
+        setBookingInProgress(true);
+        
+        try {
+            // Transform form data to API format
+            const bookingData = transformBookingFormToAPI({
+                counsellorId: selectedCounsellor.id || selectedCounsellor.userId,
+                selectedDate: selectedDate,
+                selectedTime: selectedTime,
+                notes: notes,
+                type: 'individual'
+            });
+            
+            // Call API to book appointment
+            const response = await bookAppointment(bookingData);
+            
+            console.log('Booking successful! Response:', response);
+            
+            // Show success toast
+            toast({
+                title: "Success",
+                description: "Appointment booked successfully!",
+            });
+            
+            // Force re-fetch appointments from API to get the latest data
+            setAppointmentsLoaded(false);
+            
+            // Reset form
+            setStep(1);
+            setNotes('');
+            setSelectedTime(null);
+            setPreparationGuide('');
+            
+            // Switch to appointments view (this will trigger the useEffect to fetch appointments)
+            setView('appointments');
+        } catch (err) {
+            console.error('Error booking appointment:', err);
+            
+            // The api.js interceptor transforms errors, so err.data has the response
+            const responseData = err.data || err.response?.data;
+            console.error('Error response full:', JSON.stringify(responseData, null, 2));
+            
+            // Extract error message from response
+            let errorMessage = 'Failed to book appointment. Please try again.';
+            
+            if (responseData) {
+                // Check for validation errors
+                if (responseData.validation && Array.isArray(responseData.validation)) {
+                    const validationMessages = responseData.validation.map(v => `${v.field}: ${v.message}`).join(', ');
+                    errorMessage = `Validation error: ${validationMessages}`;
+                } else if (responseData.details && Array.isArray(responseData.details)) {
+                    // Handle error details array
+                    const detailMessages = responseData.details.map(d => 
+                      typeof d === 'string' ? d : (d.message || JSON.stringify(d))
+                    ).join(', ');
+                    errorMessage = `${responseData.message || 'Validation error'}: ${detailMessages}`;
+                } else if (typeof responseData.message === 'string') {
+                    errorMessage = responseData.message;
+                } else if (typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                }
+            } else if (typeof err.message === 'string') {
+                errorMessage = err.message;
+            }
+            
+            toast({
+                title: "Booking Failed",
+                description: errorMessage,
+                variant: "destructive"
+            });
+        } finally {
+            setBookingInProgress(false);
+        }
+    };
+    
+    // Old mock version (kept for reference, can be removed)
+    const handleBookAppointmentOld = () => {
+        const newAppointment = {
+            id: `appointment-${Date.now()}`,
+            counsellor: selectedCounsellor,
+            date: selectedDate,
+            time: selectedTime,
+            status: 'upcoming',
+            sessionNotes: notes,
+            actionItems: []
+        };
+        
+        setBookedAppointments([...bookedAppointments, newAppointment]);
+        
+        // Reset form
+        setStep(1);
+        setNotes('');
+        setSelectedTime(null);
+        setPreparationGuide('');
+        
+        // Switch to appointments view
+        setView('appointments');
+    };
+
+    // 'Break It Down' handler removed per design change
+
+    const toggleActionItem = (appointmentId, itemId) => {
+        const updatedAppointments = bookedAppointments.map(app =>
+            app.id === appointmentId
+                ? {
+                    ...app,
+                    actionItems: app.actionItems.map(item =>
+                        item.id === itemId ? { ...item, completed: !item.completed } : item
+                    )
+                }
+                : app
+        );
+        setBookedAppointments(updatedAppointments);
+    };
+
+    const handleDateClick = (day) => {
+        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+        if (newDate >= new Date(new Date().setDate(new Date().getDate() - 1))) {
+            setSelectedDate(newDate);
+            setSelectedTime(null);
+        }
+    };
+
+    const handlePrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+    const renderCalendar = () => {
+        const calendarDays = [];
+        const today = new Date();
+        const startDay = firstDayOfMonth.getDay();
+        
+        for (let i = 0; i < startDay; i++) {
+            calendarDays.push(<div key={`empty-${i}`} className="p-2"></div>);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+            const isToday = date.toDateString() === today.toDateString();
+            const isSelected = date.toDateString() === selectedDate.toDateString();
+            const isPast = date < new Date(today.setHours(0, 0, 0, 0));
+
+            const baseText = currentTheme === 'midnight' ? 'text-white' : 'text-gray-900';
+            const pastText = currentTheme === 'midnight' ? 'text-slate-500' : 'text-gray-400';
+            const hoverFuture = currentTheme === 'midnight' ? 'hover:bg-slate-700' : 'hover:bg-cyan-100';
+            const todayStyle = currentTheme === 'midnight'
+                ? 'bg-slate-700 text-white font-semibold'
+                : 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 font-semibold';
+
+            calendarDays.push(
+                <div
+                    key={day}
+                    className={`text-center p-3 rounded-full cursor-pointer transition-all duration-300 hover:scale-105 ${
+                        isPast
+                            ? `${pastText} cursor-not-allowed`
+                            : isSelected
+                                ? 'bg-gradient-to-r from-purple-500 via-purple-600 to-violet-600 text-white font-bold shadow-lg animate-shimmer'
+                                : isToday
+                                    ? todayStyle
+                                    : `${baseText} ${hoverFuture}`
+                    }`}
+                    onClick={() => !isPast && handleDateClick(day)}
+                >
+                    {day}
+                </div>
+            );
+        }
+        return calendarDays;
+    };
+
+    const upcomingAppointments = bookedAppointments.filter(app => app.status === 'upcoming');
+    const completedAppointments = bookedAppointments.filter(app => app.status === 'completed');
+
+    // Navigation Tabs with uniform SensEase colors
+    const renderTabs = () => (
+        <div className={`flex justify-center mb-8 ${currentTheme === 'midnight' ? 'bg-slate-800 p-1 rounded-full' : 'bg-gray-100 p-1 rounded-full'}`}>
+            <div className={`flex space-x-2 ${currentTheme === 'midnight' ? 'bg-slate-700' : 'bg-gray-200'} p-1 rounded-full`}>
+                <Button 
+                    onClick={() => setView('schedule')} 
+                    variant={view === 'schedule' ? 'animated' : 'ghost'}
+                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                        view !== 'schedule' ? `${theme.colors.muted} hover:bg-cyan-50` : ''
+                    }`}
+                >
+                    {t('bookAppointment')}
+                </Button>
+                <Button 
+                    onClick={() => setView('appointments')} 
+                    variant={view === 'appointments' ? 'animated' : 'ghost'}
+                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                        view !== 'appointments' ? `${theme.colors.muted} hover:bg-cyan-50` : ''
+                    }`}
+                >
+                    {t('myAppointments')}
+                </Button>
+                <Button 
+                    onClick={() => setView('goals')} 
+                    variant={view === 'goals' ? 'animated' : 'ghost'}
+                    className={`px-6 py-2 rounded-full font-semibold transition-colors ${
+                        view !== 'goals' ? `${theme.colors.muted} hover:bg-cyan-50` : ''
+                    }`}
+                >
+                    {t('sessionGoals')}
+                </Button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="space-y-6">
+            <Card className={`${theme.colors.card} border-0 shadow-2xl`}>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <CardTitle className={`${theme.colors.text} text-xl sm:text-2xl`}>
+                            {t('appointmentManagement')}
+                        </CardTitle>
+                        {/* Calendar dropdown for mobile and tablet only */}
+                        <div className="relative lg:hidden">
+                            <button 
+                                onClick={() => setShowCalendarModal(!showCalendarModal)}
+                                className="p-2 rounded-lg bg-cyan-100 hover:bg-cyan-200 transition-colors"
+                                title="Pick a date"
+                            >
+                                <CalendarIcon className="w-5 h-5 text-cyan-600" />
+                            </button>
+                            
+                            {showCalendarModal && (
+                                <div className={`absolute right-0 mt-2 ${theme.currentTheme === 'midnight' ? 'bg-slate-800' : 'bg-white'} shadow-lg border rounded-lg p-4 z-40 w-80`}>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <button onClick={handlePrevMonth} className={`p-1 rounded ${theme.currentTheme === 'midnight' ? 'hover:bg-slate-800 text-white' : 'hover:bg-gray-100'}`}>
+                                            <ChevronLeftIcon className="w-5 h-5" />
+                                        </button>
+                                        <h4 className={`font-bold ${theme.colors.text}`}>
+                                            {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                        </h4>
+                                        <button onClick={handleNextMonth} className={`p-1 rounded ${theme.currentTheme === 'midnight' ? 'hover:bg-slate-700 text-white' : 'hover:bg-gray-100'}`}>
+                                            <ChevronRightIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <div className={`grid grid-cols-7 gap-2 text-center font-medium ${theme.colors.muted} mb-2 text-xs`}>
+                                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                            <div key={day}>{day}</div>
+                                        ))}
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-2">{renderCalendar()}</div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className={`mb-6 p-4 rounded-2xl border ${currentTheme === 'midnight' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} shadow-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
+                        <div className="space-y-1">
+                            <p className={`text-sm font-semibold ${theme.colors.text}`}>Video call (Jitsi)</p>
+                            <p className={`${theme.colors.muted} text-sm`}>Create a room and share the host/participant links with your counsellor.</p>
+                        </div>
+                        <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg" onClick={() => navigate('/video-call')}>
+                            Open video call page
+                        </Button>
+                    </div>
+                    {/* Mobile quick actions: three tappable options */}
+                    <div className={`lg:hidden mb-4 p-4 rounded-lg ${theme.currentTheme === 'midnight' ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                        <div className={`grid grid-cols-3 gap-3`}>
+                            <button onClick={() => setView('schedule')} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white p-3 rounded-lg text-xs text-center">
+                                {t('bookAppointment')}
+                            </button>
+                            <button onClick={() => setView('appointments')} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white p-3 rounded-lg text-xs text-center">
+                                {t('myAppointments')}
+                            </button>
+                            <button onClick={() => setView('goals')} className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white p-3 rounded-lg text-xs text-center">
+                                {t('sessionGoals')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="hidden lg:block">{renderTabs()}</div>
+
+                    {view === 'schedule' && step === 1 && (
+                        <div className="space-y-8">
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Counselor Selection */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className={`text-xl font-semibold ${theme.colors.text}`}>1. {t('chooseYourCounselor')}</h3>
+                                        <div className={`text-sm ${theme.colors.muted}`}>
+                                            {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Loading State */}
+                                    {loadingCounsellors && (
+                                        <div className="text-center py-8">
+                                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+                                            <p className={`${theme.colors.muted} mt-2`}>Loading counsellors for selected date...</p>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Counselor selection cards */}
+                                    {!loadingCounsellors && counsellors.length > 0 && (
+                                        <div className="space-y-4">
+                                            {counsellors.map((counsellor) => {
+                                                const { online, offline, unspecified } = groupSlotsByMode(counsellor);
+                                                const totalSlots = online.length + offline.length + unspecified.length;
+
+                                                return (
+                                                    <div
+                                                        key={counsellor.id}
+                                                        className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-300 hover:shadow-lg ${
+                                                            selectedCounsellor?.id === counsellor.id
+                                                                ? currentTheme === 'midnight'
+                                                                    ? 'border-slate-500 bg-slate-800'
+                                                                    : 'border-cyan-500 bg-cyan-50'
+                                                                : currentTheme === 'midnight'
+                                                                    ? 'border-slate-700 hover:border-slate-500 bg-slate-800/70'
+                                                                    : 'border-gray-200 hover:border-cyan-300'
+                                                        }`}
+                                                        onClick={() => {
+                                                            setSelectedCounsellor(counsellor);
+                                                            setSelectedTime(null); // Reset time when changing counsellor
+                                                            // On mobile, after selecting a counsellor, reveal time + notes selector
+                                                            try {
+                                                                if (window?.innerWidth && window.innerWidth < 1024) {
+                                                                    setMobileShowTimeSelection(true);
+                                                                }
+                                                            } catch (e) {
+                                                                // fallback: do nothing
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center space-x-4">
+                                                            <img src={counsellor.imageUrl} alt={counsellor.name} className="w-16 h-16 rounded-full" />
+                                                            <div className="flex-1">
+                                                                <h4 className={`font-bold ${theme.colors.text}`}>{counsellor.name}</h4>
+                                                                <p className={`${theme.colors.muted} text-sm`}>{counsellor.specialty}</p>
+                                                                <div className="mt-2 space-y-1">
+                                                                    {totalSlots > 0 ? (
+                                                                        <>
+                                                                            <p className={`text-xs ${theme.colors.muted}`}>
+                                                                                Available today: {totalSlots} slot{totalSlots > 1 ? 's' : ''}
+                                                                            </p>
+                                                                            {online.length > 0 && (
+                                                                                <div className="flex items-center flex-wrap gap-2">
+                                                                                    <Badge variant="outline" className="text-[11px] border-green-300 text-green-700 bg-green-50">Online</Badge>
+                                                                                    {online.slice(0, 3).map((slot, index) => (
+                                                                                        <Badge key={`${counsellor.id}-online-${index}`} variant="outline" className="text-xs border-cyan-300 text-cyan-700 bg-cyan-50">
+                                                                                            {slot}
+                                                                                        </Badge>
+                                                                                    ))}
+                                                                                    {online.length > 3 && (
+                                                                                        <Badge key={`${counsellor.id}-online-more`} variant="outline" className="text-xs border-gray-300 text-gray-600">
+                                                                                            +{online.length - 3} more
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                            {offline.length > 0 && (
+                                                                                <div className="flex items-center flex-wrap gap-2">
+                                                                                    <Badge variant="outline" className="text-[11px] border-amber-300 text-amber-700 bg-amber-50">Offline</Badge>
+                                                                                    {offline.slice(0, 3).map((slot, index) => (
+                                                                                        <Badge key={`${counsellor.id}-offline-${index}`} variant="outline" className="text-xs border-gray-300 text-gray-700 bg-gray-100">
+                                                                                            {slot}
+                                                                                        </Badge>
+                                                                                    ))}
+                                                                                    {offline.length > 3 && (
+                                                                                        <Badge key={`${counsellor.id}-offline-more`} variant="outline" className="text-xs border-gray-300 text-gray-600">
+                                                                                            +{offline.length - 3} more
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                            {offline.length === 0 && unspecified.length > 0 && (
+                                                                                <div className="flex items-center flex-wrap gap-2">
+                                                                                    <Badge variant="outline" className="text-[11px] border-gray-300 text-gray-700 bg-gray-100">Unspecified</Badge>
+                                                                                    {unspecified.slice(0, 3).map((slot, index) => (
+                                                                                        <Badge key={`${counsellor.id}-unspecified-${index}`} variant="outline" className="text-xs border-gray-300 text-gray-700 bg-gray-50">
+                                                                                            {slot}
+                                                                                        </Badge>
+                                                                                    ))}
+                                                                                    {unspecified.length > 3 && (
+                                                                                        <Badge key={`${counsellor.id}-unspecified-more`} variant="outline" className="text-xs border-gray-300 text-gray-600">
+                                                                                            +{unspecified.length - 3} more
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <p className={`${theme.colors.muted} text-xs italic`}>No available slots for this date</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    
+                                    {/* No Counsellors Found */}
+                                    {!loadingCounsellors && counsellors.length === 0 && (
+                                        <div className={`text-center py-8 ${theme.colors.secondary} rounded-lg`}>
+                                            <p className={`${theme.colors.muted}`}>No counsellors available for the selected date.</p>
+                                            <p className={`${theme.colors.muted} text-sm mt-2`}>Try selecting a different date.</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Calendar and Time Selection (desktop only) */}
+                                <div className="space-y-6 hidden lg:block">
+                                    <h3 className={`text-xl font-semibold ${theme.colors.text}`}>2. {t('selectDateTime')}</h3>
+                                    
+                                    {/* Calendar */}
+                                    <Card className={`${theme.colors.card} shadow-lg`}>
+                                        <CardContent className="p-4">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <Button onClick={handlePrevMonth} variant="outline" size="sm" className={`${theme.currentTheme === 'midnight' ? 'text-white hover:bg-slate-700' : 'hover:bg-cyan-50'}`}>
+                                                    <ChevronLeftIcon />
+                                                </Button>
+                                                <h4 className={`font-bold text-lg ${theme.colors.text}`}>
+                                                    {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                                </h4>
+                                                <Button onClick={handleNextMonth} variant="outline" size="sm" className={`${theme.currentTheme === 'midnight' ? 'text-white hover:bg-slate-700' : 'hover:bg-cyan-50'}`}>
+                                                    <ChevronRightIcon />
+                                                </Button>
+                                            </div>
+                                            <div className={`grid grid-cols-7 gap-2 text-center font-medium ${theme.colors.muted} mb-2 text-sm`}>
+                                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                                    <div key={day}>{day}</div>
+                                                ))}
+                                            </div>
+                                            <div className="grid grid-cols-7 gap-2">{renderCalendar()}</div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Time Selection */}
+                                    <div>
+                                        <h4 className={`font-semibold ${theme.colors.text} mb-3`}>{t('availableTimes')}</h4>
+                                        {selectedCounsellor ? (() => {
+                                            const { online: onlineSlots, offline: offlineSlots, unspecified: unspecifiedSlots } = groupSlotsByMode(selectedCounsellor);
+                                            const hasSlots = onlineSlots.length > 0 || offlineSlots.length > 0 || unspecifiedSlots.length > 0;
+
+                                            if (!hasSlots) {
+                                                return (
+                                                    <div className={`text-center py-6 ${theme.colors.secondary} rounded-lg`}>
+                                                        <p className={`${theme.colors.muted} text-sm`}>
+                                                            No available times for this counsellor on the selected date.
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="space-y-4">
+                                                    {onlineSlots.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="text-[11px] border-green-300 text-green-700 bg-green-50">Online</Badge>
+                                                                <span className={`text-xs ${theme.colors.muted}`}>Join via video</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                {onlineSlots.map((time, idx) => (
+                                                                    <Button
+                                                                        key={`time-online-${idx}-${time}`}
+                                                                        onClick={() => setSelectedTime(time)}
+                                                                        variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                        className={`p-3 transition-all duration-200 ${
+                                                                            currentTheme === 'midnight'
+                                                                                ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                : ''
+                                                                        } ${
+                                                                            selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                        }`}
+                                                                    >
+                                                                        {time}
+                                                                    </Button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {offlineSlots.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="text-[11px] border-amber-300 text-amber-700 bg-amber-50">Offline</Badge>
+                                                                <span className={`text-xs ${theme.colors.muted}`}>In-person on campus</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                {offlineSlots.map((time, idx) => (
+                                                                    <Button
+                                                                        key={`time-offline-${idx}-${time}`}
+                                                                        onClick={() => setSelectedTime(time)}
+                                                                        variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                        className={`p-3 transition-all duration-200 ${
+                                                                            currentTheme === 'midnight'
+                                                                                ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                : ''
+                                                                        } ${
+                                                                            selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                        }`}
+                                                                    >
+                                                                        {time}
+                                                                    </Button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {unspecifiedSlots.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge variant="outline" className="text-[11px] border-gray-300 text-gray-700 bg-gray-50">Unspecified</Badge>
+                                                                <span className={`text-xs ${theme.colors.muted}`}>Mode not provided</span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                {unspecifiedSlots.map((time, idx) => (
+                                                                    <Button
+                                                                        key={`time-unspecified-${idx}-${time}`}
+                                                                        onClick={() => setSelectedTime(time)}
+                                                                        variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                        className={`p-3 transition-all duration-200 ${
+                                                                            currentTheme === 'midnight'
+                                                                                ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                : ''
+                                                                        } ${
+                                                                            selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                        }`}
+                                                                    >
+                                                                        {time}
+                                                                    </Button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })() : (
+                                            <div className={`text-center py-6 ${theme.colors.secondary} rounded-lg`}>
+                                                <p className={`${theme.colors.muted} text-sm`}>
+                                                    No available times for this counsellor on the selected date.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Mobile: show time selection & notes after counsellor tap */}
+                                <div className="md:hidden">
+                                    {mobileShowTimeSelection && (
+                                        <div className={`space-y-4 p-3 ${theme.currentTheme === 'midnight' ? 'bg-slate-800' : 'bg-white'} rounded-lg border ${theme.currentTheme === 'midnight' ? 'border-slate-700' : 'border-gray-200'}`}>
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <button onClick={() => setShowCalendarModal(true)} className={`p-2 rounded-md mr-2 ${theme.currentTheme === 'midnight' ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                                                        <CalendarIcon className="w-6 h-6 text-cyan-600" />
+                                                    </button>
+                                                    <img src={selectedCounsellor.imageUrl} alt={selectedCounsellor.name} className="w-12 h-12 rounded-full" />
+                                                    <div>
+                                                        <div className={`font-semibold ${theme.colors.text}`}>{selectedCounsellor.name}</div>
+                                                        <div className={`${theme.colors.muted} text-sm`}>{selectedCounsellor.specialty}</div>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <button onClick={() => setMobileShowTimeSelection(false)} className={`text-sm ${theme.colors.muted}`}>{t('back')}</button>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <div className="mb-2">
+                                                    <div className={`text-xs ${theme.colors.muted} mb-1`}>{t('selectAvailableTime')}</div>
+                                                    {selectedCounsellor ? (() => {
+                                                        const { online: onlineSlots, offline: offlineSlots, unspecified: unspecifiedSlots } = groupSlotsByMode(selectedCounsellor);
+                                                        const hasSlots = onlineSlots.length > 0 || offlineSlots.length > 0 || unspecifiedSlots.length > 0;
+
+                                                        if (!hasSlots) {
+                                                            return (
+                                                                <div className={`text-center py-4 ${theme.colors.secondary} rounded-lg`}>
+                                                                    <p className={`${theme.colors.muted} text-xs`}>No available times</p>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {onlineSlots.length > 0 && (
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge variant="outline" className="text-[11px] border-green-300 text-green-700 bg-green-50">Online</Badge>
+                                                                            <span className={`text-[11px] ${theme.colors.muted}`}>Video call</span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                            {onlineSlots.map((time, idx) => (
+                                                                                <Button
+                                                                                    key={`mobile-online-${idx}-${time}`}
+                                                                                    onClick={() => setSelectedTime(time)}
+                                                                                    variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                                    className={`text-sm p-3 transition-colors ${
+                                                                                        currentTheme === 'midnight'
+                                                                                            ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                            : ''
+                                                                                    } ${
+                                                                                        selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                                    }`}
+                                                                                >
+                                                                                    {time}
+                                                                                </Button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {offlineSlots.length > 0 && (
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge variant="outline" className="text-[11px] border-amber-300 text-amber-700 bg-amber-50">Offline</Badge>
+                                                                            <span className={`text-[11px] ${theme.colors.muted}`}>On-campus</span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                            {offlineSlots.map((time, idx) => (
+                                                                                <Button
+                                                                                    key={`mobile-offline-${idx}-${time}`}
+                                                                                    onClick={() => setSelectedTime(time)}
+                                                                                    variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                                    className={`text-sm p-3 transition-colors ${
+                                                                                        currentTheme === 'midnight'
+                                                                                            ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                            : ''
+                                                                                    } ${
+                                                                                        selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                                    }`}
+                                                                                >
+                                                                                    {time}
+                                                                                </Button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {unspecifiedSlots.length > 0 && (
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge variant="outline" className="text-[11px] border-gray-300 text-gray-700 bg-gray-50">Unspecified</Badge>
+                                                                            <span className={`text-[11px] ${theme.colors.muted}`}>Mode not provided</span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-3 gap-2">
+                                                                            {unspecifiedSlots.map((time, idx) => (
+                                                                                <Button
+                                                                                    key={`mobile-unspecified-${idx}-${time}`}
+                                                                                    onClick={() => setSelectedTime(time)}
+                                                                                    variant={selectedTime === time ? 'animated' : 'outline'}
+                                                                                    className={`text-sm p-3 transition-colors ${
+                                                                                        currentTheme === 'midnight'
+                                                                                            ? 'text-white border-slate-700 hover:bg-slate-700 hover:text-white'
+                                                                                            : ''
+                                                                                    } ${
+                                                                                        selectedTime !== time ? 'hover:bg-cyan-50' : ''
+                                                                                    }`}
+                                                                                >
+                                                                                    {time}
+                                                                                </Button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })() : (
+                                                        <div className={`text-center py-4 ${theme.colors.secondary} rounded-lg`}>
+                                                            <p className={`${theme.colors.muted} text-xs`}>No available times</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {selectedTime && (
+                                                    <div className="flex items-center justify-between mt-2">
+                                                        <div className={`text-sm ${theme.colors.text}`}>
+                                                            {t('selectedTime')}: <span className="font-medium">{selectedTime}</span>
+                                                            {selectedSlotMode && <span className={`ml-2 text-xs ${theme.colors.muted}`}>({selectedSlotMode})</span>}
+                                                        </div>
+                                                        <div className={`text-xs ${theme.colors.muted}`}>{selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                                    </div>
+                                                )}
+
+                                                <div className="mt-3">
+                                                    <textarea
+                                                        value={notes}
+                                                        onChange={(e) => setNotes(e.target.value)}
+                                                        rows={3}
+                                                        placeholder={t('sessionNotesPlaceholder')}
+                                                        className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
+                                                            currentTheme === 'midnight'
+                                                              ? 'bg-slate-800 text-white border-slate-600 placeholder-slate-400'
+                                                              : 'bg-white text-gray-900 border-gray-300'
+                                                        }`}
+                                                    />
+                                                </div>
+
+                                                {/* Proceed button removed from mobile panel — use the single Proceed at the end of the form */}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+
+                            {/* Your Intent - Desktop Only - Full Width */}
+                            <div className="space-y-6 hidden lg:block">
+                                <h3 className={`text-xl font-semibold ${theme.colors.text}`}>3. {t('yourIntent')}</h3>
+                                <Card className={`${theme.colors.card} shadow-lg`}>
+                                    <CardContent className="p-4">
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            placeholder={t('sessionNotesPlaceholder')}
+                                            rows={5}
+                                            className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${
+                                                currentTheme === 'midnight'
+                                                  ? 'bg-slate-800 text-white border-slate-600 placeholder-slate-400'
+                                                  : 'bg-white text-gray-900 border-gray-300'
+                                            }`}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            <div className="flex justify-end pt-6 border-t">
+                                <Button
+                                    onClick={() => setStep(2)}
+                                    disabled={!selectedTime}
+                                    variant="animated"
+                                    className="disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {t('proceedToConfirmation')}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'schedule' && step === 2 && selectedCounsellor && (
+                        <div className="space-y-6">
+                            <div className="text-center">
+                                <h2 className={`text-3xl font-bold ${theme.colors.text} mb-2`}>{t('confirmYourAppointment')}</h2>
+                                <p className={`${theme.colors.muted} text-lg`}>{t('reviewBookingDetails')}</p>
+                            </div>
+
+                            <Card className={`${theme.colors.card} shadow-xl border border-cyan-200`}>
+                                <CardContent className="p-6">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center space-x-4">
+                                            <img src={selectedCounsellor.imageUrl} alt={selectedCounsellor.name} className="w-16 h-16 rounded-full" />
+                                            <div>
+                                                <h3 className={`font-bold text-xl ${theme.colors.text}`}>{selectedCounsellor.name}</h3>
+                                                <p className={`${theme.colors.muted}`}>{selectedCounsellor.specialty}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4 py-4 border-t">
+                                            <div className="flex items-center space-x-2">
+                                                <CalendarIcon className="w-5 h-5 text-cyan-500" />
+                                                <span className={theme.colors.text}>
+                                                    {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <ClockIcon className="w-5 h-5 text-cyan-500" />
+                                                <span className={theme.colors.text}>
+                                                    {selectedTime}
+                                                    {selectedSlotMode && <span className={`ml-2 text-xs ${theme.colors.muted}`}>({selectedSlotMode})</span>}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {notes && (
+                                            <div className="pt-4 border-t">
+                                                <h4 className={`font-semibold ${theme.colors.text} mb-2`}>Your Notes:</h4>
+                                                <p className={`${theme.colors.muted} ${theme.currentTheme === 'midnight' ? 'bg-slate-700' : 'bg-gray-50'} p-3 rounded-lg`}>{notes}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <div className="flex justify-between pt-6 border-t">
+                                <Button
+                                    onClick={() => setStep(1)}
+                                    variant="outline"
+                                    disabled={bookingInProgress}
+                                    className={`${theme.currentTheme === 'midnight' ? 'hover:bg-slate-700 border-slate-600' : 'hover:bg-gray-50'}`}
+                                >
+                                    {t('backToEdit')}
+                                </Button>
+                                <Button
+                                    onClick={handleBookAppointment}
+                                    variant="animated"
+                                    disabled={bookingInProgress}
+                                    className="disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {bookingInProgress ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Booking...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircleIcon className="w-5 h-5 mr-2" />
+                                            {t('confirmBooking')}
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'appointments' && (
+                        <div className="space-y-8">
+                            {/* Loading State */}
+                            {loadingAppointments && (
+                                <div className="text-center py-12">
+                                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mb-4"></div>
+                                    <p className={`${theme.colors.muted}`}>Loading your appointments...</p>
+                                </div>
+                            )}
+
+                            {/* Appointments Content */}
+                            {!loadingAppointments && (
+                                <>
+                                    {/* Upcoming Appointments */}
+                                    <div>
+                                        <h3 className={`text-2xl font-bold ${theme.colors.text} mb-6 flex items-center`}>
+                                            <ClockIcon className="w-6 h-6 mr-2 text-cyan-500" />
+                                            {t('sessions') || t('upcomingSessions')}
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {upcomingAppointments.length > 0 ? upcomingAppointments.map(app => (
+                                        <Card key={app.id} className={`${theme.colors.card} shadow-md border-0`}>
+                                            <CardContent className="p-4">
+                                                <div>
+                                                    <button className="w-full text-left" onClick={() => setExpandedAppointments(prev => ({ ...prev, [app.id]: !prev[app.id] }))}>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-3">
+                                                                {app.counsellor && (
+                                                                    <>
+                                                                        <img src={app.counsellor.imageUrl} alt={app.counsellor.name} className="w-12 h-12 rounded-full" />
+                                                                        <div>
+                                                                            <div className={`font-semibold ${theme.colors.text}`}>{app.counsellor.name}</div>
+                                                                            <div className={`text-sm ${theme.colors.muted}`}>{app.time}</div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            <div className={`text-xs ${theme.colors.text}`}>{app.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                                        </div>
+                                                    </button>
+
+                                                    {expandedAppointments[app.id] && (
+                                                        <div className="mt-3">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <Badge className="bg-cyan-100 text-cyan-700">{t('confirmed')}</Badge>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <Button
+                                                                        onClick={() => { setAppointmentToCancel(app.id); setShowCancelModal(true); }}
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="text-red-600 hover:bg-red-50 hover:border-red-300"
+                                                                    >
+                                                                        <TrashIcon className="w-4 h-4 mr-1" />
+                                                                        {t('cancel')}
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+
+                                                            {app.sessionNotes && (
+                                                                <div className="mt-2 p-3 bg-cyan-50 rounded-lg border border-cyan-200">
+                                                                    <p className={`text-sm ${theme.colors.muted}`}>{app.sessionNotes}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    )) : (
+                                        <div className={`text-center py-12 bg-gradient-to-r ${theme.colors.secondary} rounded-2xl`}>
+                                            <CalendarIcon className={`w-16 h-16 ${theme.colors.muted} mx-auto mb-4`} />
+                                            <p className={`${theme.colors.muted} text-lg`}>{t('noUpcomingAppointments')}</p>
+                                            <Button
+                                                onClick={() => setView('schedule')}
+                                                className="mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                                            >
+                                                {t('bookYourFirstSession')}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Past Appointments */}
+                            <div>
+                                <h3 className={`text-2xl font-bold ${theme.colors.text} mb-6 flex items-center`}>
+                                    <CheckCircleIcon className="w-6 h-6 mr-2 text-green-500" />
+                                    {t('pastSessions')}
+                                </h3>
+                                <div className="space-y-4">
+                                    {completedAppointments.length > 0 ? completedAppointments.map(app => (
+                                        <Card key={app.id} className={`${theme.colors.card} shadow-md border-0`}>
+                                            <CardContent className="p-4">
+                                                <div>
+                                                    <button className="w-full text-left" onClick={() => setExpandedAppointments(prev => ({ ...prev, [app.id]: !prev[app.id] }))}>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-3">
+                                                                {app.counsellor && (
+                                                                    <>
+                                                                        <img src={app.counsellor.imageUrl} alt={app.counsellor.name} className="w-12 h-12 rounded-full" />
+                                                                        <div>
+                                                                            <div className={`font-semibold ${theme.colors.text}`}>Session with {app.counsellor.name}</div>
+                                                                            <div className={`text-sm ${theme.colors.muted}`}>{app.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} • {app.time}</div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            <Badge className="bg-green-100 text-green-800">{t('completed')}</Badge>
+                                                        </div>
+                                                    </button>
+
+                                                    {expandedAppointments[app.id] && (
+                                                        <div className="mt-3">
+                                                            {app.sessionNotes && (
+                                                                <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                                                                    <h5 className="font-semibold text-green-800 mb-2">Session Notes:</h5>
+                                                                    <p className="text-sm text-green-700">{app.sessionNotes}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {/* action items intentionally removed for past sessions */}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    )) : (
+                                        <div className={`text-center py-12 bg-gradient-to-r ${theme.colors.secondary} rounded-2xl`}>
+                                            <CheckCircleIcon className={`w-16 h-16 ${theme.colors.muted} mx-auto mb-4`} />
+                                            <p className={`${theme.colors.muted} text-lg`}>{t('noPastSessionsYet')}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {view === 'goals' && (
+                        <div className="space-y-6">
+                            <div className="text-center mb-8">
+                                <h2 className={`text-2xl sm:text-3xl font-bold ${theme.colors.text} mb-2`}>{t('sessionGoals')}</h2>
+                                <p className={`${theme.colors.muted} text-sm sm:text-base`}>{t('trackTasksAssigned')}</p>
+                            </div>
+
+                            {loadingSessionGoals ? (
+                                <div className="text-center py-8">
+                                    <div className={`inline-flex items-center justify-center space-x-2 ${theme.colors.muted}`}>
+                                        <div className="w-3 h-3 bg-cyan-500 rounded-full animate-bounce"></div>
+                                        <div className="w-3 h-3 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                        <div className="w-3 h-3 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                                    </div>
+                                    <p className={`mt-2 ${theme.colors.muted}`}>Loading session goals...</p>
+                                </div>
+                            ) : sessionGoals.length > 0 ? (
+                                <div className="space-y-6">
+                                    {sessionGoals.map(app => (
+                                        app.actionItems && app.actionItems.length > 0 && app.counsellor && (
+                                            <Card key={app.id} className={`shadow-lg border-0 ${theme.currentTheme === 'midnight' ? 'bg-slate-900 border border-slate-800' : theme.colors.card}`}>
+                                                <CardHeader>
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <h4 className={`font-bold text-lg sm:text-xl ${theme.colors.text}`}>
+                                                                {app.counsellor.name}
+                                                            </h4>
+                                                            <p className={`${theme.colors.muted} text-xs sm:text-sm`}>
+                                                                {app.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} at {app.time}
+                                                            </p>
+                                                        </div>
+                                                        <Badge className="bg-green-500 text-white">{t('completed')}</Badge>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="space-y-4">
+                                                        {app.sessionNotes && (
+                                                            <div className={`p-3 rounded-lg ${theme.currentTheme === 'midnight' ? 'bg-slate-800' : 'bg-blue-50'}`}>
+                                                                <p className={`text-sm ${theme.colors.muted} mb-1`}>Session Notes:</p>
+                                                                <p className={`${theme.colors.text}`}>{app.sessionNotes}</p>
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <h5 className={`font-semibold text-sm sm:text-base mb-3 ${theme.currentTheme === 'midnight' ? 'text-white' : theme.colors.text}`}>Action Items:</h5>
+                                                            {app.actionItems.map(item => (
+                                                                <div key={item.id} className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${theme.currentTheme === 'midnight' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={item.completed}
+                                                                        onChange={() => toggleActionItem(app.id, item.id)}
+                                                                        className={`w-5 h-5 text-cyan-600 ${theme.currentTheme === 'midnight' ? 'bg-slate-700 border-slate-600' : 'bg-white border-gray-300'} rounded focus:ring-cyan-500 cursor-pointer`}
+                                                                    />
+                                                                    <span className={`flex-1 text-sm sm:text-base ${item.completed ? (theme.currentTheme === 'midnight' ? 'line-through text-slate-400' : `line-through ${theme.colors.muted}`) : (theme.currentTheme === 'midnight' ? 'text-white' : theme.colors.text)}`}>
+                                                                        {item.text}
+                                                                    </span>
+                                                                    {item.completed && (
+                                                                        <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        )
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className={`text-center py-12 bg-gradient-to-r ${theme.colors.secondary} rounded-2xl`}>
+                                    <CheckCircleIcon className={`w-16 h-16 ${theme.colors.muted} mx-auto mb-4`} />
+                                    <p className={`${theme.colors.muted} text-lg`}>No completed sessions with action items yet</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <ConfirmationModal
+                isOpen={showCancelModal}
+                onClose={() => setShowCancelModal(false)}
+                onConfirm={() => {
+                    if (appointmentToCancel) {
+                        setBookedAppointments(bookedAppointments.filter(app => app.id !== appointmentToCancel));
+                        setAppointmentToCancel(null);
+                    }
+                    setShowCancelModal(false);
+                }}
+                title="Cancel Appointment"
+                message="Are you sure you want to cancel this appointment?"
+                theme={theme}
+            />
+            {/* Calendar Modal (full calendar) */}
+            {showCalendarModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowCalendarModal(false)} />
+                    <div className={`relative ${theme.currentTheme === 'midnight' ? 'bg-slate-800' : 'bg-white'} rounded-xl p-6 max-w-md w-full z-60 shadow-2xl ${theme.currentTheme === 'midnight' ? 'border-slate-700' : 'border-gray-100'} border`}>
+                        <div className="flex items-center justify-between mb-6 border-b pb-4">
+                            <h3 className={`font-bold text-lg ${theme.colors.text}`}>{t('chooseYourCounselor')}</h3>
+                            <button onClick={() => setShowCalendarModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">✕</button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-2 text-center">{renderCalendar()}</div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default StudentAppointments;

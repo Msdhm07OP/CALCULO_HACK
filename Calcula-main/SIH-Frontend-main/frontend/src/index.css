@@ -321,6 +321,11 @@
     white-space: pre-wrap;
   }
 
+  /* Ensure inactive Radix tab panels take no space */
+  [role="tabpanel"][hidden] {
+    display: none !important;
+  }
+
   .hover-lift {
     @apply transition-all duration-300 ease-out;
   }

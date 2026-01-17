@@ -282,6 +282,7 @@ export const updateMemory = async (req, res) => {
  * Delete a memory and its photo
  * DELETE /api/student/memory-wall/:id
  */
+
 export const deleteMemory = async (req, res) => {
   try {
     const { id } = req.params;

@@ -921,7 +921,7 @@ const AdminDashboard = () => {
       </CardHeader>
 
       <CardContent className="chat-panel">
-        <Tabs value={chatTab} onValueChange={setChatTab} className="chat-panel">
+        <Tabs value={chatTab} onValueChange={setChatTab}>
 
           <TabsList className="grid grid-cols-3 w-full">
             <TabsTrigger value="chat">💬 Chat</TabsTrigger>
@@ -1002,8 +1002,8 @@ const AdminDashboard = () => {
             <RealtimeVoice onAddMessage={addMessageFromVoice} theme={theme} />
           </TabsContent>
 
-          <TabsContent value="history" className="flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto pt-4 px-4">
+          <TabsContent value="history">
+            <div className="overflow-y-auto px-4">
               {conversationHistory.length === 0 ? (
                 <p className="text-center text-gray-500 mt-10">
                   No previous chats yet.

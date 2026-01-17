@@ -38,18 +38,30 @@ export const themes = {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [currentTheme, setCurrentTheme] = useState('ocean');
+  // Lazy initialization to prevent flash of wrong theme
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sensease-theme') || 'ocean';
+    }
+    return 'ocean';
+  });
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('sensease-theme');
-    if (savedTheme && themes[savedTheme]) {
-      setCurrentTheme(savedTheme);
+    const root = window.document.documentElement;
+    // Remove previous theme classes if any (optional, but good practice if more themes add classes)
+    root.classList.remove('light', 'dark');
+
+    if (currentTheme === 'midnight') {
+      root.classList.add('dark');
+    } else {
+      root.classList.add('light'); // Explicitly add light for completeness
     }
-  }, []);
+
+    localStorage.setItem('sensease-theme', currentTheme);
+  }, [currentTheme]);
 
   const changeTheme = (themeName) => {
     setCurrentTheme(themeName);
-    localStorage.setItem('sensease-theme', themeName);
   };
 
   const value = {

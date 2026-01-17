@@ -1,7 +1,7 @@
-# SIH Mental Health Platform Backend
+# Calcula Mental Health Platform Backend
 
 ## 🚀 Overview
-Enterprise-grade Node.js/Express backend for the SIH Mental Health Platform with Supabase integration, multi-tenant architecture, and comprehensive security.
+Enterprise-grade Node.js/Express backend for the Calcula Mental Health Platform with Supabase integration, multi-tenant architecture, and comprehensive security.
 
 ## 🔐 Authentication
 **Supabase HTTP-only Cookie-based JWT Authentication**
@@ -38,7 +38,7 @@ Each college operates as an isolated tenant with complete data separation:
 
 ## 📁 Project Structure
 ```
-sih-backend/
+calcula-backend/
 ├── package.json
 ├── .env
 ├── .gitignore
@@ -87,7 +87,7 @@ sih-backend/
 
 ### Installation
 ```bash
-cd sih-backend
+cd calcula-backend
 npm install
 ```
 
@@ -327,4 +327,4 @@ For technical support and questions about this backend implementation, please co
 
 ---
 
-**Built with ❤️ for SIH 2024**
+**Built with ❤️ for Calcula 2024**

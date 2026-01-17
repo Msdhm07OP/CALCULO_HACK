@@ -15,7 +15,7 @@ const InfoLine = ({ label, value }) => (
 );
 
 const buildFallbackMeeting = (topic) => {
-  const slug = `sih-room-${Date.now()}`;
+  const slug = `calcula-room-${Date.now()}`;
   const url = `https://meet.jit.si/${slug}`;
   return {
     id: slug,

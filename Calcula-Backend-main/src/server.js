@@ -24,7 +24,7 @@ app.set('io', io);
 
 // Start the server
 httpServer.listen(PORT, () => {
-  console.log(`SIH Backend running on port ${PORT}`);
+  console.log(`Calcula Backend running on port ${PORT}`);
   console.log(`Socket.io server ready for connections`);
 });
 

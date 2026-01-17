@@ -1,4 +1,4 @@
-# SensEase - Mental Health Support Platform
+# Calcula - Mental Health Support Platform
 
 A comprehensive mental health and wellness platform for students, counselors, and administrators.
 

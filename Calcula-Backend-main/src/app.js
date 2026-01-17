@@ -111,7 +111,7 @@ app.use("/api/ai", auth, tenant, aiRoutes);
 
 app.get("/", (req, res) => {
   res.json({
-    message: "SIH Mental Health Platform Backend",
+    message: "Calcula Mental Health Platform Backend",
     version: "1.0.0",
     documentation: "/api/docs",
     health: "/health",

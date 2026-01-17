@@ -21,7 +21,7 @@ All existing endpoints work exactly the same:
 ```json
 {
   "userId": "user-uuid",
-  "conversationId": "conversation-uuid", // optional
+  "conversationId": "conversation-uuid", 
   "message": "I'm feeling stressed about exams"
 }
 ```

@@ -1,21 +1,21 @@
 import React, { useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@context/AuthContext";
-import { ThemeProvider } from "@context/ThemeContext";
-import { LanguageProvider } from "@context/LanguageContext";
-import { AnnouncementProvider } from "@context/AnnouncementContext";
-import { AccessibilityProvider, useAccessibility } from "@context/AccessibilityContext";
-import { Toaster } from "@components/ui/toaster";
-import AccessibilityToolbar from "@components/shared/AccessibilityToolbar";
-import SkipToMain from "@components/shared/SkipToMain";
-import StudentDashboard from "@components/dashboard/StudentDashboard";
-import CounsellorDashboard from "@components/dashboard/CounsellorDashboard";
-import AdminDashboard from "@components/dashboard/AdminDashboard";
-import AICompanion from '@components/ai/AICompanion';
-import JournalingPage from '@components/wellness/JournalingPage';
-import LandingPage from '@components/landing/LandingPage';
-import VideoCallPage from '@components/appointments/VideoCallPage';
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { LanguageProvider } from "./context/LanguageContext";
+import { AnnouncementProvider } from "./context/AnnouncementContext";
+import { AccessibilityProvider, useAccessibility } from "./context/AccessibilityContext";
+import { Toaster } from "./components/ui/toaster";
+import AccessibilityToolbar from "./components/shared/AccessibilityToolbar";
+import SkipToMain from "./components/shared/SkipToMain";
+import StudentDashboard from "./components/dashboard/StudentDashboard";
+import CounsellorDashboard from "./components/dashboard/CounsellorDashboard";
+import AdminDashboard from "./components/dashboard/AdminDashboard";
+import AICompanion from './components/ai/AICompanion';
+import JournalingPage from './components/wellness/JournalingPage';
+import LandingPage from './components/landing/LandingPage';
+import VideoCallPage from './components/appointments/VideoCallPage';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 // Component that persists the current pathname and restores it after refresh
@@ -26,7 +26,7 @@ const RoutePathPersistence = () => {
 
   // Save path on change
   useEffect(() => {
-    try { localStorage.setItem('last_path', location.pathname + location.search); } catch (e) {}
+    try { localStorage.setItem('last_path', location.pathname + location.search); } catch (e) { }
   }, [location.pathname, location.search]);
 
   // On mount, if user is logged in and there's a saved path different from current, navigate there
@@ -41,18 +41,18 @@ const RoutePathPersistence = () => {
           navigate(last, { replace: true });
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   return null;
 };
- 
+
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50 flex items-center justify-center">
@@ -74,11 +74,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/" replace />;
   }
-  
+
   if (allowedRoles) {
     const allowed = allowedRoles.map(r => r.toLowerCase());
     const role = (user?.role || '').toLowerCase();
@@ -86,7 +86,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       return <Navigate to="/" replace />;
     }
   }
-  
+
   return children;
 };
 
@@ -96,10 +96,10 @@ const AccessibilityAttributeApplier = ({ children }) => {
 
   useEffect(() => {
     const htmlElement = document.documentElement;
-    
+
     // Apply font size
     htmlElement.setAttribute('data-font-size', fontSize);
-    
+
     // Apply high contrast
     if (highContrast) {
       htmlElement.classList.add('high-contrast');
@@ -127,33 +127,33 @@ function App() {
                     <Routes>
                       {/* Public Routes */}
                       <Route path="/landing" element={<LandingPage />} />
-                      
+
                       {/* Protected Routes */}
-                      <Route 
-                        path="/student-dashboard" 
+                      <Route
+                        path="/student-dashboard"
                         element={
                           <ProtectedRoute allowedRoles={['student']}>
                             <StudentDashboard />
                           </ProtectedRoute>
-                        } 
+                        }
                       />
-                      
-                      <Route 
-                        path="/counsellor-dashboard" 
+
+                      <Route
+                        path="/counsellor-dashboard"
                         element={
                           <ProtectedRoute allowedRoles={['counsellor']}>
                             <CounsellorDashboard />
                           </ProtectedRoute>
-                        } 
+                        }
                       />
-                      
-                      <Route 
-                        path="/admin-dashboard" 
+
+                      <Route
+                        path="/admin-dashboard"
                         element={
                           <ProtectedRoute allowedRoles={['admin', 'superadmin']}>
                             <AdminDashboard />
                           </ProtectedRoute>
-                        } 
+                        }
                       />
 
                       <Route
@@ -192,17 +192,17 @@ function App() {
                           </ProtectedRoute>
                         }
                       />
-                      
+
                       {/* Default Route - Show landing page */}
                       <Route path="/" element={<LandingPage />} />
-                      
+
                       {/* Catch all route */}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
-                    
+
                     {/* Toast notifications */}
                     <Toaster />
-                    
+
                     {/* Accessibility Toolbar */}
                     <AccessibilityToolbar />
                   </div>

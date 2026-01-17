@@ -1,3 +1,3 @@
 // Central backend toggle for frontend-only mode
-export const BACKEND_ENABLED = false; // set to true when you add a real backend
-export const API_BASE = ''; // set to e.g. 'http://localhost:5000' when BACKEND_ENABLED=true
+export const BACKEND_ENABLED = true;
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
